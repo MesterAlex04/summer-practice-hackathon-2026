@@ -112,6 +112,7 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
   const [liveCoords, setLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [city, setCity] = useState<string | null>(null);
   const [locStatus, setLocStatus] = useState<"idle" | "locating" | "ok" | "denied">("idle");
+  const [searchQuery, setSearchQuery] = useState("");
 
   function request(id: string) {
     setRequested((prev) => new Set(prev).add(id));
@@ -167,12 +168,17 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
     return () => ctrl.abort();
   }, [hasCoords, lat, lng]);
 
-  const forYou = DEMO_EVENTS.filter((e) => profileSports.includes(e.sport)).slice(0, 6);
-  const tryNew = DEMO_EVENTS.filter((e) => !profileSports.includes(e.sport)).slice(0, 5);
+  const q = searchQuery.trim().toLowerCase();
+  const matchesSport = (sport: string) =>
+    !q || sport.replace("_", " ").includes(q);
 
-  if (forYou.length === 0 && tryNew.length === 0) return null;
+  const filteredCommunity = communityEvents.filter((e) => matchesSport(e.sport));
+  const forYou = DEMO_EVENTS.filter((e) => profileSports.includes(e.sport) && matchesSport(e.sport)).slice(0, 6);
+  const tryNew = DEMO_EVENTS.filter((e) => !profileSports.includes(e.sport) && matchesSport(e.sport)).slice(0, 5);
 
   const allVisible = [...forYou, ...tryNew];
+
+  if (filteredCommunity.length === 0 && allVisible.length === 0 && !q) return null;
 
   const demoPins: MapPin[] = hasCoords
     ? allVisible.map((ev) => ({
@@ -184,7 +190,7 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
       }))
     : [];
 
-  const communityPins: MapPin[] = communityEvents
+  const communityPins: MapPin[] = filteredCommunity
     .filter((e) => e.lat !== undefined && e.lng !== undefined)
     .map((e) => ({
       id:      `c-${e.id}`,
@@ -196,7 +202,7 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
     }));
 
   const myPins: MapPin[] = myEvents
-    .filter((e) => e.lat !== undefined && e.lng !== undefined)
+    .filter((e) => e.lat !== undefined && e.lng !== undefined && matchesSport(e.sport))
     .map((e) => ({
       id:      `m-${e.id}`,
       sport:   e.sport,
@@ -207,6 +213,9 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
     }));
 
   const pins = [...myPins, ...communityPins, ...demoPins];
+
+  const totalVisible = filteredCommunity.length + allVisible.length;
+  const noResults = q && totalVisible === 0;
 
   const centerLat = lat ?? 44.4268;
   const centerLng = lng ?? 26.1025;
@@ -221,7 +230,7 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
           </h2>
           <p className="text-slate-400 text-sm mt-1 flex items-center gap-2 flex-wrap">
             <span>
-              <span className="text-emerald-300 font-semibold">{allVisible.length}</span> events
+              <span className="text-emerald-300 font-semibold">{totalVisible}</span> events
             </span>
             {locStatus === "locating" && (
               <span className="text-cyan-300/80 inline-flex items-center gap-1.5">
@@ -260,6 +269,35 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
         </button>
       </div>
 
+      {/* Search bar */}
+      <div className="relative">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">🔍</span>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by sport (e.g. tennis, football…)"
+          className="w-full pl-11 pr-10 py-3 rounded-2xl bg-slate-800/70 border border-slate-700/60 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500/60 focus:shadow-lg focus:shadow-emerald-500/10 transition-all duration-200"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-lg leading-none transition-colors"
+            aria-label="Clear search"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
+      {noResults && (
+        <div className="flex flex-col items-center text-center py-10 gap-2">
+          <span className="text-4xl">🏅</span>
+          <p className="text-white font-semibold">No events found for &ldquo;{searchQuery}&rdquo;</p>
+          <p className="text-slate-500 text-sm">Try a different sport name.</p>
+        </div>
+      )}
+
       {/* Map */}
       {mapOpen && (
         <div className="space-y-2 card-rise">
@@ -280,13 +318,13 @@ export default function DiscoverEvents({ profileSports, baseLat, baseLng, commun
       )}
 
       {/* Community Events (real, created by other users) */}
-      {communityEvents.length > 0 && (
+      {filteredCommunity.length > 0 && (
         <Carousel
           title="From the Community"
           tagline="Created by other players"
           accent="emerald"
         >
-          {communityEvents.map((ev, i) => (
+          {filteredCommunity.map((ev, i) => (
             <CommunityCard key={ev.id} ev={ev} index={i} />
           ))}
         </Carousel>

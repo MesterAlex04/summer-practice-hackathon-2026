@@ -68,7 +68,7 @@ export default async function EventsPage() {
 
   const { data: communityRaw } = await supabase
     .from("events")
-    .select("id, sport, start_time, venue_name, venue_location, status, group_size, captain_id")
+    .select("id, sport, start_time, venue_name, venue_location, venue_metadata, status, group_size, captain_id")
     .gte("start_time", new Date().toISOString())
     .order("start_time", { ascending: true })
     .limit(20);
@@ -93,6 +93,17 @@ export default async function EventsPage() {
       if (loc && Array.isArray(loc.coordinates) && loc.coordinates.length >= 2) {
         lng = loc.coordinates[0];
         lat = loc.coordinates[1];
+      }
+      // fallback: auto-matched events store coords in venue_metadata
+      if (lat === undefined || lng === undefined) {
+        const meta = (e.venue_metadata ?? {}) as Record<string, unknown>;
+        if (typeof meta.lat === "number" && typeof meta.lng === "number") {
+          lat = meta.lat as number;
+          lng = meta.lng as number;
+        } else if (typeof meta.centroid_lat === "number" && typeof meta.centroid_lng === "number") {
+          lat = meta.centroid_lat as number;
+          lng = meta.centroid_lng as number;
+        }
       }
       return {
         id:         e.id,
