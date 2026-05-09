@@ -3,41 +3,57 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type State = "idle" | "loading" | "sent" | "error";
+type State = "idle" | "loading" | "error";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [state, setState] = useState<State>("idle");
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [state, setState]       = useState<State>("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !password) return;
 
     setState("loading");
     setErrorMsg("");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
 
-    if (error) {
-      setErrorMsg(error.message);
-      setState("error");
-    } else {
-      setState("sent");
+    // Try sign-in first; if user doesn't exist, sign them up automatically
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (!signInError) {
+      window.location.href = "/";
+      return;
     }
+
+    // "Invalid login credentials" can mean wrong password OR user doesn't exist yet
+    if (
+      signInError.message.includes("Invalid login credentials") ||
+      signInError.message.includes("invalid_credentials")
+    ) {
+      const { error: signUpError } = await supabase.auth.signUp({ email, password });
+
+      if (!signUpError) {
+        // signUp logs the user in automatically when email confirmation is disabled
+        window.location.href = "/";
+        return;
+      }
+
+      setErrorMsg(signUpError.message);
+    } else {
+      setErrorMsg(signInError.message);
+    }
+
+    setState("error");
   }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
       {/* Glow */}
       <div className="pointer-events-none fixed inset-0 flex items-start justify-center">
-        <div className="h-[40rem] w-[40rem] rounded-full bg-emerald-600/10 blur-3xl" />
+        <div className="h-160 w-160 rounded-full bg-emerald-600/10 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md space-y-8">
@@ -54,107 +70,85 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-8 shadow-2xl">
-          {state === "sent" ? (
-            <SentState email={email} onReset={() => { setState("idle"); setEmail(""); }} />
-          ) : (
-            <>
-              <h2 className="text-xl font-semibold text-white mb-1">Sign in</h2>
-              <p className="text-slate-400 text-sm mb-6">
-                Enter your email — we&apos;ll send a magic link. No password needed.
+          <h2 className="text-xl font-semibold text-white mb-1">Sign in</h2>
+          <p className="text-slate-400 text-sm mb-6">
+            New here? Just enter any email and pick a password — we&apos;ll create your account instantly.
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={state === "loading"}
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:opacity-50 transition"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                placeholder="6+ characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                disabled={state === "loading"}
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:opacity-50 transition"
+              />
+            </div>
+
+            {state === "error" && (
+              <p className="text-sm text-red-400 bg-red-950/40 border border-red-900/60 rounded-lg px-4 py-2.5">
+                {errorMsg}
               </p>
+            )}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label htmlFor="email" className="block text-sm font-medium text-slate-300">
-                    Email address
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={state === "loading"}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:opacity-50 transition"
-                  />
-                </div>
+            <button
+              type="submit"
+              disabled={state === "loading" || !email || !password}
+              className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 font-semibold text-slate-950 transition-colors duration-200 flex items-center justify-center gap-2"
+            >
+              {state === "loading" ? (
+                <>
+                  <SpinnerIcon />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in / Sign up"
+              )}
+            </button>
+          </form>
 
-                {state === "error" && (
-                  <p className="text-sm text-red-400 bg-red-950/40 border border-red-900/60 rounded-lg px-4 py-2.5">
-                    {errorMsg}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={state === "loading" || !email}
-                  className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 font-semibold text-slate-950 transition-colors duration-200 flex items-center justify-center gap-2"
-                >
-                  {state === "loading" ? (
-                    <>
-                      <SpinnerIcon />
-                      Sending link…
-                    </>
-                  ) : (
-                    "Send magic link"
-                  )}
-                </button>
-              </form>
-
-              <p className="mt-6 text-center text-xs text-slate-500">
-                By continuing you agree to our{" "}
-                <span className="underline underline-offset-2 cursor-pointer hover:text-slate-300 transition-colors">
-                  Terms of Service
-                </span>
-              </p>
-            </>
-          )}
+          <p className="mt-6 text-center text-xs text-slate-500">
+            No email verification needed — just enter your credentials.
+          </p>
         </div>
 
         {/* Sport pills */}
         <div className="flex flex-wrap justify-center gap-2 opacity-30 select-none">
-          {["🎾 Tennis", "🏀 Basketball", "⚽ Football", "🚴 Cycling", "🧗 Climbing"].map(
-            (s) => (
-              <span
-                key={s}
-                className="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full border border-slate-700"
-              >
-                {s}
-              </span>
-            )
-          )}
+          {["🎾 Tennis", "🏀 Basketball", "⚽ Football", "🚴 Cycling", "🧗 Climbing"].map((s) => (
+            <span
+              key={s}
+              className="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full border border-slate-700"
+            >
+              {s}
+            </span>
+          ))}
         </div>
       </div>
     </main>
-  );
-}
-
-function SentState({ email, onReset }: { email: string; onReset: () => void }) {
-  return (
-    <div className="text-center space-y-4">
-      <div className="flex justify-center">
-        <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-          <span className="text-2xl">📬</span>
-        </div>
-      </div>
-      <div>
-        <h2 className="text-xl font-semibold text-white">Check your inbox</h2>
-        <p className="text-slate-400 text-sm mt-1">
-          We sent a magic link to{" "}
-          <span className="text-emerald-400 font-medium">{email}</span>
-        </p>
-      </div>
-      <p className="text-xs text-slate-500">
-        Click the link in the email to sign in. It expires in 60 minutes.
-      </p>
-      <button
-        onClick={onReset}
-        className="w-full rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-2.5 text-sm font-medium transition-colors"
-      >
-        Use a different email
-      </button>
-    </div>
   );
 }
 

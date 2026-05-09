@@ -470,19 +470,27 @@ function ConfirmedView({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onEdit}
-          className="text-sm text-emerald-400 hover:text-emerald-300 font-medium transition-colors border border-emerald-500/30 hover:border-emerald-400/50 rounded-full px-5 py-2"
+      <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+        <Link
+          href="/events"
+          className="w-full text-center text-sm font-semibold text-slate-950 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] transition-all rounded-2xl px-5 py-3 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
         >
-          ✏️ Edit
-        </button>
-        <button
-          onClick={onCancel}
-          className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
-        >
-          Cancel for today
-        </button>
+          View My Events →
+        </Link>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onEdit}
+            className="text-sm text-emerald-400 hover:text-emerald-300 font-medium transition-colors border border-emerald-500/30 hover:border-emerald-400/50 rounded-full px-5 py-2"
+          >
+            ✏️ Edit
+          </button>
+          <button
+            onClick={onCancel}
+            className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            Cancel for today
+          </button>
+        </div>
       </div>
     </div>
   );
