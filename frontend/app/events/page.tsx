@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { SPORT_EMOJI, type Sport } from "@/lib/sports";
+import DiscoverEvents from "@/components/DiscoverEvents";
 
 const STATUS_STYLES: Record<string, string> = {
   forming:   "text-amber-400 bg-amber-500/15 border-amber-500/30",
@@ -17,6 +18,29 @@ export default async function EventsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const [{ data: profile }, { data: avail }] = await Promise.all([
+    supabase.from("profiles").select("sports").eq("id", user.id).single(),
+    supabase
+      .from("availability")
+      .select("current_location")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const profileSports: string[] = (profile?.sports as string[]) ?? [];
+
+  let baseLat: number | undefined;
+  let baseLng: number | undefined;
+  if (avail?.current_location) {
+    const loc = avail.current_location as unknown as { coordinates?: [number, number] };
+    if (Array.isArray(loc.coordinates) && loc.coordinates.length >= 2) {
+      baseLng = loc.coordinates[0];
+      baseLat = loc.coordinates[1];
+    }
+  }
 
   const { data: participations } = await supabase
     .from("event_participants")
@@ -142,6 +166,10 @@ export default async function EventsPage() {
             })}
           </div>
         )}
+
+        <div className="mt-10">
+          <DiscoverEvents profileSports={profileSports} baseLat={baseLat} baseLng={baseLng} />
+        </div>
       </main>
     </div>
   );

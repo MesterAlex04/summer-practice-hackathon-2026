@@ -105,8 +105,15 @@ export function ProfileForm({ defaultDisplayName, defaultBio, savedSports }: Pro
             </p>
           )}
 
-          {/* Success hint */}
-          {state.status === "success" && displaySports.length === 0 && (
+          {/* AI warning (key missing, API error, etc.) */}
+          {state.status === "success" && state.aiWarning && (
+            <p className="text-sm text-amber-400 bg-amber-950/40 border border-amber-900/60 rounded-lg px-4 py-2.5">
+              ⚠️ {state.aiWarning}
+            </p>
+          )}
+
+          {/* Success hint — only shown when AI ran fine but found nothing */}
+          {state.status === "success" && !state.aiWarning && displaySports.length === 0 && (
             <p className="text-sm text-slate-400">
               Profile saved! No sports were detected in your bio — add more detail to let the AI identify your interests.
             </p>

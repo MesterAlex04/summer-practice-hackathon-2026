@@ -8,6 +8,7 @@ export type ProfileActionState = {
   status: "idle" | "success" | "error";
   message?: string;
   extractedSports?: ExtractedSport[];
+  aiWarning?: string;
 };
 
 export async function saveProfile(
@@ -32,13 +33,17 @@ export async function saveProfile(
 
   // --- AI extraction via Gemini ---
   let extractedSports: ExtractedSport[] = [];
+  let aiWarning: string | undefined;
 
   if (bio) {
     try {
       extractedSports = await extractSportsFromBio(bio);
     } catch (err) {
       console.error("Gemini extraction failed:", err);
-      // Non-fatal — save profile without AI sports
+      aiWarning =
+        err instanceof Error
+          ? `AI detection failed: ${err.message}`
+          : "AI sport detection is unavailable right now — check your GEMINI_API_KEY.";
     }
   }
 
@@ -67,5 +72,5 @@ export async function saveProfile(
 
   revalidatePath("/profile");
 
-  return { status: "success", extractedSports };
+  return { status: "success", extractedSports, aiWarning };
 }

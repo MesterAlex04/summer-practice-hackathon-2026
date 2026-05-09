@@ -1,9 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { showUpToday, cancelAvailability } from "@/app/today/actions";
 import { SPORT_EMOJI, type Sport } from "@/lib/sports";
+
+const MapView = dynamic(() => import("./MapView"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-40 w-full rounded-2xl bg-slate-800/60 border border-slate-700/60 animate-pulse flex items-center justify-center">
+      <span className="text-slate-500 text-sm">Loading map…</span>
+    </div>
+  ),
+});
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -144,7 +154,7 @@ export function ShowUpToday({ displayName, profileSports, existing }: Props) {
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* Ambient glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[600px] w-[600px] rounded-full bg-emerald-600/8 blur-3xl" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-150 w-150 rounded-full bg-emerald-600/8 blur-3xl" />
       </div>
 
       {/* Header */}
@@ -176,6 +186,7 @@ export function ShowUpToday({ displayName, profileSports, existing }: Props) {
 
         {(step === "configuring" || step === "submitting") && (
           <ConfiguringView
+            coords={coords}
             sportsMenu={sportsMenu}
             selectedSports={selectedSports}
             onToggle={toggleSport}
@@ -301,6 +312,7 @@ function LocatingView() {
 // ─── Configuring View ─────────────────────────────────────────────────────────
 
 function ConfiguringView({
+  coords,
   sportsMenu,
   selectedSports,
   onToggle,
@@ -313,6 +325,7 @@ function ConfiguringView({
   error,
   canConfirm,
 }: {
+  coords: { lat: number; lng: number } | null;
   sportsMenu: string[];
   selectedSports: string[];
   onToggle: (s: string) => void;
@@ -327,6 +340,14 @@ function ConfiguringView({
 }) {
   return (
     <div className="flex flex-col gap-8 pt-6 pb-4">
+      {/* Location preview map */}
+      {coords && (
+        <section className="space-y-2">
+          <SectionLabel icon="📍" text="Your location" />
+          <MapView lat={coords.lat} lng={coords.lng} venueName="You are here" />
+        </section>
+      )}
+
       {/* Section: Sport */}
       <section className="space-y-3">
         <SectionLabel icon="🏅" text="What are you up for?" />

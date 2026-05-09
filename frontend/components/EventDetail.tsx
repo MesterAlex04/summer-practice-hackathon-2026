@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { SPORT_EMOJI, type Sport } from "@/lib/sports";
 import type { VenueResult } from "@/app/events/[id]/actions";
+import EventChat from "./EventChat";
 
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
@@ -50,6 +51,7 @@ const RSVP_COLOR: Record<string, string> = {
 };
 
 export function EventDetail({
+  id,
   sport,
   captainId,
   currentUserId,
@@ -62,19 +64,19 @@ export function EventDetail({
   centroidLng,
   participants,
 }: Props) {
-  const emoji    = SPORT_EMOJI[sport as Sport] ?? "🏅";
-  const start    = new Date(startTime);
-  const end      = new Date(endTime);
-  const isCapt   = captainId === currentUserId;
-  const mapLat   = venue?.lat ?? centroidLat;
-  const mapLng   = venue?.lng ?? centroidLng;
+  const emoji      = SPORT_EMOJI[sport as Sport] ?? "🏅";
+  const start      = new Date(startTime);
+  const end        = new Date(endTime);
+  const isCapt     = captainId === currentUserId;
+  const mapLat     = venue?.lat ?? centroidLat;
+  const mapLng     = venue?.lng ?? centroidLng;
   const statusClass = STATUS_STYLES[status] ?? STATUS_STYLES.forming;
 
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Ambient glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[600px] w-[600px] rounded-full bg-emerald-600/8 blur-3xl" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-150 w-150 rounded-full bg-emerald-600/8 blur-3xl" />
       </div>
 
       {/* Header */}
@@ -106,7 +108,7 @@ export function EventDetail({
               </p>
             </div>
           </div>
-          <span className={`text-xs font-semibold px-3 py-1 rounded-full border capitalize flex-shrink-0 ${statusClass}`}>
+          <span className={`text-xs font-semibold px-3 py-1 rounded-full border capitalize shrink-0 ${statusClass}`}>
             {status}
           </span>
         </div>
@@ -157,9 +159,9 @@ export function EventDetail({
 
           <div className="space-y-2">
             {participants.map((p) => {
-              const name    = p.profiles?.display_name ?? "Unknown";
+              const name     = p.profiles?.display_name ?? "Unknown";
               const initials = name.slice(0, 2).toUpperCase();
-              const isMe    = p.user_id === currentUserId;
+              const isMe     = p.user_id === currentUserId;
               const dotColor = RSVP_COLOR[p.rsvp_status] ?? "bg-slate-400";
 
               return (
@@ -168,7 +170,7 @@ export function EventDetail({
                   className="flex items-center gap-3 rounded-xl bg-slate-800/40 border border-slate-700/40 px-4 py-3"
                 >
                   {/* Avatar */}
-                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
                     <span className="text-emerald-300 text-xs font-bold">{initials}</span>
                   </div>
 
@@ -183,12 +185,12 @@ export function EventDetail({
 
                   {/* Captain crown */}
                   {p.role === "captain" && (
-                    <span className="text-base flex-shrink-0">👑</span>
+                    <span className="text-base shrink-0">👑</span>
                   )}
 
                   {/* RSVP indicator dot */}
                   <div
-                    className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`}
+                    className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`}
                     title={p.rsvp_status}
                   />
                 </div>
@@ -210,6 +212,17 @@ export function EventDetail({
             ))}
           </div>
         </div>
+
+        {/* Group chat */}
+        <div className="space-y-3 pt-1">
+          <h2 className="text-white font-bold">Group Chat</h2>
+          <EventChat
+            eventId={id}
+            currentUserId={currentUserId}
+            participants={participants}
+          />
+        </div>
+
       </main>
     </div>
   );

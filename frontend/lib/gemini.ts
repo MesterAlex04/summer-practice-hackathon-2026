@@ -7,7 +7,7 @@ export type ExtractedSport = { sport: string; skill_level: SkillLevel };
 
 export async function extractSportsFromBio(bio: string): Promise<ExtractedSport[]> {
   const response = await gemini.models.generateContent({
-    model: "gemini-2.5-flash-preview-05-20",
+    model: "gemini-2.5-flash",
     contents: bio,
     config: {
       systemInstruction:
