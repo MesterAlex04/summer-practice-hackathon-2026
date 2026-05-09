@@ -21,7 +21,7 @@ export default async function EventPage({
     .select(
       `
       id, sport, captain_id, start_time, end_time,
-      venue_name, venue_metadata, group_size, status,
+      venue_name, venue_metadata, venue_location, group_size, status,
       event_participants (
         user_id, role, rsvp_status,
         profiles ( display_name, photo_url )
@@ -33,18 +33,27 @@ export default async function EventPage({
 
   if (error || !event) notFound();
 
+  // Parse venue_location (PostGIS GEOGRAPHY → GeoJSON {type, coordinates:[lng,lat]})
+  const venueLocRaw = event.venue_location as unknown as { coordinates?: [number, number] } | null;
+  let venueLat: number | undefined;
+  let venueLng: number | undefined;
+  if (venueLocRaw && Array.isArray(venueLocRaw.coordinates) && venueLocRaw.coordinates.length >= 2) {
+    venueLng = venueLocRaw.coordinates[0];
+    venueLat = venueLocRaw.coordinates[1];
+  }
+
   // venue_metadata holds centroid coords (set by match_pending_users)
   // and is overwritten with Google Places data once a venue is found
   const meta = (event.venue_metadata ?? {}) as Record<string, unknown>;
-  const centroidLat = (meta.centroid_lat ?? meta.lat) as number | undefined;
-  const centroidLng = (meta.centroid_lng ?? meta.lng) as number | undefined;
+  const centroidLat = (meta.centroid_lat ?? meta.lat ?? venueLat) as number | undefined;
+  const centroidLng = (meta.centroid_lng ?? meta.lng ?? venueLng) as number | undefined;
 
   let venue: VenueResult = event.venue_name
     ? {
         name:     event.venue_name as string,
         address:  (meta.address as string) ?? "",
-        lat:      (meta.lat as number) ?? centroidLat ?? 0,
-        lng:      (meta.lng as number) ?? centroidLng ?? 0,
+        lat:      (meta.lat as number) ?? venueLat ?? centroidLat ?? 0,
+        lng:      (meta.lng as number) ?? venueLng ?? centroidLng ?? 0,
         placesId: (meta.places_id as string) ?? null,
       }
     : null;

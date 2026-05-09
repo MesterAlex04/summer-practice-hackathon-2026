@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 const SPORT_PLACE_TYPES: Record<string, string[]> = {
@@ -89,4 +90,21 @@ export async function findAndSaveVenue(
   }
 
   return venue;
+}
+
+export async function joinEvent(eventId: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be signed in." };
+
+  const { error } = await supabase.from("event_participants").insert({
+    event_id:    eventId,
+    user_id:     user.id,
+    role:        "player",
+    rsvp_status: "accepted",
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath(`/events/${eventId}`);
+  return {};
 }

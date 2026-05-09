@@ -2,8 +2,11 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { SPORT_EMOJI, type Sport } from "@/lib/sports";
 import type { VenueResult } from "@/app/events/[id]/actions";
+import { joinEvent } from "@/app/events/[id]/actions";
 import EventChat from "./EventChat";
 
 const MapView = dynamic(() => import("./MapView"), {
@@ -64,13 +67,30 @@ export function EventDetail({
   centroidLng,
   participants,
 }: Props) {
+  const router = useRouter();
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
   const emoji      = SPORT_EMOJI[sport as Sport] ?? "🏅";
   const start      = new Date(startTime);
   const end        = new Date(endTime);
   const isCapt     = captainId === currentUserId;
+  const isParticipant = participants.some((p) => p.user_id === currentUserId);
   const mapLat     = venue?.lat ?? centroidLat;
   const mapLng     = venue?.lng ?? centroidLng;
   const statusClass = STATUS_STYLES[status] ?? STATUS_STYLES.forming;
+
+  async function handleJoin() {
+    setJoining(true);
+    setJoinError(null);
+    const result = await joinEvent(id);
+    if (result.error) {
+      setJoinError(result.error);
+      setJoining(false);
+    } else {
+      router.refresh();
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -212,6 +232,24 @@ export function EventDetail({
             ))}
           </div>
         </div>
+
+        {/* Join event — shown only to non-participants on open events */}
+        {!isParticipant && (status === "forming" || status === "confirmed") && (
+          <div className="space-y-2 pt-1">
+            {joinError && (
+              <p className="text-sm text-red-300 bg-red-950/40 border border-red-900/60 rounded-lg px-4 py-2.5">
+                ⚠️ {joinError}
+              </p>
+            )}
+            <button
+              onClick={handleJoin}
+              disabled={joining}
+              className="w-full text-base font-bold py-3.5 rounded-xl border transition-all duration-200 active:scale-[0.98] bg-linear-to-r from-emerald-500 to-cyan-500 text-slate-950 border-emerald-400 hover:shadow-lg hover:shadow-emerald-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {joining ? "Joining…" : "Join this event →"}
+            </button>
+          </div>
+        )}
 
         {/* Group chat */}
         <div className="space-y-3 pt-1">

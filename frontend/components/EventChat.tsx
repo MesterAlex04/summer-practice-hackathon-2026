@@ -31,6 +31,7 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
   const [text, setText]         = useState("");
   const [sending, setSending]   = useState(false);
   const [loading, setLoading]   = useState(true);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -45,6 +46,7 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
   useEffect(() => {
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
 
     async function init() {
       const { data: chat } = await supabase
@@ -52,6 +54,9 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
         .select("id")
         .eq("event_id", eventId)
         .single();
+
+      // Effect was already cleaned up while we were awaiting — bail out.
+      if (cancelled) return;
 
       if (!chat) {
         setLoading(false);
@@ -66,6 +71,8 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
         .eq("chat_id", chat.id)
         .order("created_at", { ascending: true });
 
+      if (cancelled) return;
+
       setMessages(
         (msgs ?? []).map((m) => ({
           ...m,
@@ -75,8 +82,9 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
       );
       setLoading(false);
 
+      // Unique suffix prevents name collision when Strict Mode double-fires.
       channel = supabase
-        .channel(`chat:${chat.id}`)
+        .channel(`chat:${chat.id}:${Date.now()}`)
         .on(
           "postgres_changes",
           {
@@ -95,8 +103,17 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
             };
             setMessages((prev) => {
               if (prev.some((m) => m.id === row.id)) return prev;
+              // Replace any matching optimistic placeholder for this message
+              const filtered = prev.filter(
+                (m) =>
+                  !(
+                    m.id.startsWith("opt-") &&
+                    m.sender_id === row.sender_id &&
+                    m.content === row.content
+                  )
+              );
               return [
-                ...prev,
+                ...filtered,
                 {
                   ...row,
                   message_type: row.message_type as Message["message_type"],
@@ -112,6 +129,7 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
     init();
 
     return () => {
+      cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,17 +144,38 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
     const content = text.trim();
     if (!content || !chatId || sending) return;
 
+    setSendError(null);
     setSending(true);
     setText("");
     resetTextareaHeight();
 
+    // Optimistic update so the message appears immediately
+    const optimisticId = `opt-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id:           optimisticId,
+        sender_id:    currentUserId,
+        content,
+        message_type: "user",
+        created_at:   new Date().toISOString(),
+        sender:       profileMap.get(currentUserId) ?? null,
+      },
+    ]);
+
     const supabase = createClient();
-    await supabase.from("messages").insert({
+    const { error } = await supabase.from("messages").insert({
       chat_id:      chatId,
       sender_id:    currentUserId,
       content,
       message_type: "user",
     });
+
+    if (error) {
+      // Revert the optimistic message and surface the error
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      setSendError(error.message);
+    }
 
     setSending(false);
   }
@@ -236,6 +275,13 @@ export default function EventChat({ eventId, currentUserId, participants }: Prop
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* Send error */}
+      {sendError && (
+        <div className="px-4 py-2 bg-red-950/50 border-t border-red-900/40 text-red-300 text-xs">
+          ⚠️ {sendError}
+        </div>
+      )}
 
       {/* Input bar */}
       <div className="border-t border-slate-700/60 px-4 py-3 flex items-end gap-3 bg-slate-900/60">

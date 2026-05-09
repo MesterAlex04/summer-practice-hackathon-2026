@@ -128,3 +128,35 @@
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  @keyframes card-rise {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .card-rise {
+    animation: card-rise 0.5s cubic-bezier(0.21, 1, 0.36, 1) both;
+  }
+
+  @keyframes ambient-drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(20px, -10px) scale(1.05); }
+  }
+  .ambient-drift {
+    animation: ambient-drift 14s ease-in-out infinite;
+  }
+}

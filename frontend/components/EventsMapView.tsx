@@ -9,6 +9,7 @@ export type MapPin = {
   venue: string;
   lat: number;
   lng: number;
+  pinType?: "community" | "mine";
 };
 
 type Props = {
@@ -21,7 +22,7 @@ type Props = {
 
 export default function EventsMapView({ pins, centerLat, centerLng, userLat, userLng }: Props) {
   return (
-    <div className="rounded-2xl overflow-hidden h-72 w-full border border-slate-700/60">
+    <div className="rounded-2xl overflow-hidden h-80 md:h-96 lg:h-112 w-full border border-slate-700/60 shadow-xl shadow-black/40">
       <Map
         mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
         initialViewState={{ longitude: centerLng, latitude: centerLat, zoom: 13 }}
@@ -40,10 +41,17 @@ export default function EventsMapView({ pins, centerLat, centerLng, userLat, use
         {/* Event pins */}
         {pins.map((pin) => {
           const emoji = SPORT_EMOJI[pin.sport as Sport] ?? "🏅";
+          const isMine = pin.pinType === "mine";
           return (
             <Marker key={pin.id} longitude={pin.lng} latitude={pin.lat} anchor="bottom">
               <div className="flex flex-col items-center gap-0.5">
-                <div className="bg-emerald-500 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg max-w-28 truncate whitespace-nowrap leading-tight">
+                <div
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg max-w-28 truncate whitespace-nowrap leading-tight ${
+                    isMine
+                      ? "bg-amber-400 text-slate-950"
+                      : "bg-emerald-500 text-slate-950"
+                  }`}
+                >
                   {pin.venue}
                 </div>
                 <span className="text-xl drop-shadow-lg leading-none">{emoji}</span>

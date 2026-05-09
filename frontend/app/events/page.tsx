@@ -50,11 +50,61 @@ export default async function EventsPage() {
       rsvp_status,
       events (
         id, sport, start_time, end_time,
-        venue_name, status, group_size
+        venue_name, venue_location, status, group_size
       )
     `
     )
     .eq("user_id", user.id);
+
+  // Community events: anything upcoming the user isn't already part of.
+  const myEventIds = new Set(
+    (participations ?? [])
+      .map((p) => {
+        const ev = (Array.isArray(p.events) ? p.events[0] : p.events) as { id?: string } | null;
+        return ev?.id;
+      })
+      .filter((x): x is string => !!x)
+  );
+
+  const { data: communityRaw } = await supabase
+    .from("events")
+    .select("id, sport, start_time, venue_name, venue_location, status, group_size, captain_id")
+    .gte("start_time", new Date().toISOString())
+    .order("start_time", { ascending: true })
+    .limit(20);
+
+  type CommunityEvent = {
+    id: string;
+    sport: string;
+    start_time: string;
+    venue_name: string | null;
+    status: string;
+    group_size: number;
+    lat?: number;
+    lng?: number;
+  };
+
+  const communityEvents: CommunityEvent[] = (communityRaw ?? [])
+    .filter((e) => !myEventIds.has(e.id))
+    .map((e) => {
+      const loc = e.venue_location as unknown as { coordinates?: [number, number] } | null;
+      let lat: number | undefined;
+      let lng: number | undefined;
+      if (loc && Array.isArray(loc.coordinates) && loc.coordinates.length >= 2) {
+        lng = loc.coordinates[0];
+        lat = loc.coordinates[1];
+      }
+      return {
+        id:         e.id,
+        sport:      e.sport,
+        start_time: e.start_time,
+        venue_name: e.venue_name,
+        status:     e.status,
+        group_size: e.group_size,
+        lat,
+        lng,
+      };
+    });
 
   type EventRow = {
     id: string;
@@ -62,6 +112,7 @@ export default async function EventsPage() {
     start_time: string;
     end_time: string;
     venue_name: string | null;
+    venue_location: unknown;
     status: string;
     group_size: number;
     role: string;
@@ -80,14 +131,40 @@ export default async function EventsPage() {
       (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
     );
 
+  // Build map pins for the user's own events (same shape as communityEvents)
+  type MyEventPin = {
+    id: string;
+    sport: string;
+    start_time: string;
+    venue_name: string | null;
+    status: string;
+    group_size: number;
+    lat?: number;
+    lng?: number;
+  };
+
+  const myEventPins: MyEventPin[] = events.map((ev) => {
+    const loc = ev.venue_location as unknown as { coordinates?: [number, number] } | null;
+    let lat: number | undefined;
+    let lng: number | undefined;
+    if (loc && Array.isArray(loc.coordinates) && loc.coordinates.length >= 2) {
+      lng = loc.coordinates[0];
+      lat = loc.coordinates[1];
+    }
+    return { id: ev.id, sport: ev.sport, start_time: ev.start_time, venue_name: ev.venue_name, status: ev.status, group_size: ev.group_size, lat, lng };
+  });
+
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-slate-950 relative">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-150 w-150 rounded-full bg-emerald-600/8 blur-3xl" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-150 w-150 rounded-full bg-emerald-600/12 blur-3xl ambient-drift" />
+        <div className="absolute top-1/3 -left-32 h-96 w-96 rounded-full bg-fuchsia-600/10 blur-3xl ambient-drift" style={{ animationDelay: "3s" }} />
+        <div className="absolute bottom-0 -right-32 h-96 w-96 rounded-full bg-cyan-600/10 blur-3xl ambient-drift" style={{ animationDelay: "6s" }} />
+        <div className="absolute top-2/3 left-1/2 -translate-x-1/2 h-72 w-72 rounded-full bg-violet-600/8 blur-3xl ambient-drift" style={{ animationDelay: "9s" }} />
       </div>
 
-      <header className="relative flex items-center justify-between px-5 pt-6 pb-2">
-        <Link href="/" className="text-white font-bold text-base tracking-tight">
+      <header className="relative flex items-center justify-between px-5 sm:px-8 pt-6 pb-2 max-w-lg md:max-w-3xl lg:max-w-5xl xl:max-w-7xl mx-auto">
+        <Link href="/" className="text-white font-bold text-base sm:text-lg tracking-tight">
           ShowUp<span className="text-emerald-400">2</span>Move
         </Link>
         <Link
@@ -98,8 +175,18 @@ export default async function EventsPage() {
         </Link>
       </header>
 
-      <main className="relative px-5 py-6 max-w-lg mx-auto">
-        <h1 className="text-2xl font-black text-white mb-6">My Events</h1>
+      <main className="relative px-5 sm:px-8 py-6 max-w-lg md:max-w-3xl lg:max-w-5xl xl:max-w-7xl mx-auto">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <h1 className="text-3xl font-black bg-linear-to-r from-emerald-300 via-cyan-300 to-fuchsia-300 bg-clip-text text-transparent">
+            My Events
+          </h1>
+          <Link
+            href="/events/new"
+            className="flex items-center gap-2 text-sm font-bold px-4 py-2.5 rounded-full border bg-linear-to-r from-emerald-500 to-cyan-500 text-slate-950 border-emerald-400 hover:shadow-lg hover:shadow-emerald-500/30 transition-all duration-300 active:scale-95"
+          >
+            <span className="text-base leading-none">+</span> Create event
+          </Link>
+        </div>
 
         {events.length === 0 ? (
           <div className="flex flex-col items-center text-center py-20 gap-4">
@@ -118,7 +205,7 @@ export default async function EventsPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {events.map((ev) => {
               const emoji = SPORT_EMOJI[ev.sport as Sport] ?? "🏅";
               const start = new Date(ev.start_time);
@@ -129,7 +216,7 @@ export default async function EventsPage() {
                 <Link
                   key={ev.id}
                   href={`/events/${ev.id}`}
-                  className="flex items-center gap-4 w-full rounded-2xl bg-slate-800/60 border border-slate-700/60 hover:border-slate-600 hover:bg-slate-700/60 active:scale-[0.99] transition-all p-4"
+                  className="flex items-center gap-4 w-full rounded-2xl bg-linear-to-br from-slate-800/80 via-slate-800/60 to-slate-900/80 border border-slate-700/60 hover:border-emerald-400/50 hover:shadow-xl hover:shadow-emerald-500/10 active:scale-[0.99] transition-all duration-300 p-4"
                 >
                   <span className="text-3xl shrink-0">{emoji}</span>
 
@@ -168,7 +255,13 @@ export default async function EventsPage() {
         )}
 
         <div className="mt-10">
-          <DiscoverEvents profileSports={profileSports} baseLat={baseLat} baseLng={baseLng} />
+          <DiscoverEvents
+            profileSports={profileSports}
+            baseLat={baseLat}
+            baseLng={baseLng}
+            communityEvents={communityEvents}
+            myEvents={myEventPins}
+          />
         </div>
       </main>
     </div>
