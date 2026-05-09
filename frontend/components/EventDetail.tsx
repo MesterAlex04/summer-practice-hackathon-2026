@@ -8,6 +8,8 @@ import { SPORT_EMOJI, type Sport } from "@/lib/sports";
 import type { VenueResult } from "@/app/events/[id]/actions";
 import { joinEvent } from "@/app/events/[id]/actions";
 import EventChat from "./EventChat";
+import EventPolls, { type Poll } from "./EventPolls";
+import WeatherCard, { type WeatherSnapshot } from "./WeatherCard";
 
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
@@ -38,6 +40,8 @@ type Props = {
   centroidLat?: number;
   centroidLng?: number;
   participants: Participant[];
+  weather: WeatherSnapshot | null;
+  polls: Poll[];
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -66,10 +70,13 @@ export function EventDetail({
   centroidLat,
   centroidLng,
   participants,
+  weather,
+  polls,
 }: Props) {
   const router = useRouter();
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied">("idle");
 
   const emoji      = SPORT_EMOJI[sport as Sport] ?? "🏅";
   const start      = new Date(startTime);
@@ -79,6 +86,52 @@ export function EventDetail({
   const mapLat     = venue?.lat ?? centroidLat;
   const mapLng     = venue?.lng ?? centroidLng;
   const statusClass = STATUS_STYLES[status] ?? STATUS_STYLES.forming;
+
+  function downloadCalendar() {
+    const ics = buildIcs({
+      uid:      `event-${id}@showup2move`,
+      title:    `${sport.charAt(0).toUpperCase() + sport.slice(1).replace("_", " ")} — ShowUp2Move`,
+      start,
+      end,
+      location: venue?.name
+        ? `${venue.name}${venue.address ? `, ${venue.address}` : ""}`
+        : "ShowUp2Move event",
+      description: `Group sport activity organized via ShowUp2Move.`,
+    });
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href      = url;
+    a.download  = `showup2move-${sport}-${start.toISOString().slice(0, 10)}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function shareEvent() {
+    if (typeof window === "undefined") return;
+    const url   = `${window.location.origin}/events/${id}`;
+    const title = `${sport} on ShowUp2Move`;
+    const text  = `Join me for ${sport} on ${start.toLocaleDateString()}!`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch {
+        // user cancelled or share unsupported — fall through to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus("copied");
+      setTimeout(() => setShareStatus("idle"), 2000);
+    } catch {
+      // clipboard blocked — open native prompt as last resort
+      window.prompt("Copy this link:", url);
+    }
+  }
 
   async function handleJoin() {
     setJoining(true);
@@ -149,6 +202,25 @@ export function EventDetail({
             {end.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
           </p>
         </div>
+
+        {/* Calendar export + Share */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={downloadCalendar}
+            className="text-sm font-semibold py-2.5 rounded-xl border border-slate-700/60 bg-slate-800/60 text-slate-200 hover:border-emerald-500/40 hover:text-emerald-300 transition-all flex items-center justify-center gap-2"
+          >
+            📅 Add to calendar
+          </button>
+          <button
+            onClick={shareEvent}
+            className="text-sm font-semibold py-2.5 rounded-xl border border-slate-700/60 bg-slate-800/60 text-slate-200 hover:border-cyan-500/40 hover:text-cyan-300 transition-all flex items-center justify-center gap-2"
+          >
+            {shareStatus === "copied" ? "✅ Copied!" : "🔗 Share"}
+          </button>
+        </div>
+
+        {/* Weather forecast */}
+        <WeatherCard weather={weather} />
 
         {/* Map + venue card */}
         {mapLat !== undefined && mapLng !== undefined && (
@@ -251,6 +323,16 @@ export function EventDetail({
           </div>
         )}
 
+        {/* Polls / voting */}
+        <div className="pt-1">
+          <EventPolls
+            eventId={id}
+            currentUserId={currentUserId}
+            isCaptain={isCapt}
+            polls={polls}
+          />
+        </div>
+
         {/* Group chat */}
         <div className="space-y-3 pt-1">
           <h2 className="text-white font-bold">Group Chat</h2>
@@ -264,4 +346,62 @@ export function EventDetail({
       </main>
     </div>
   );
+}
+
+function pad(n: number) {
+  return n.toString().padStart(2, "0");
+}
+
+function toIcsDate(d: Date) {
+  return (
+    d.getUTCFullYear().toString() +
+    pad(d.getUTCMonth() + 1) +
+    pad(d.getUTCDate()) +
+    "T" +
+    pad(d.getUTCHours()) +
+    pad(d.getUTCMinutes()) +
+    pad(d.getUTCSeconds()) +
+    "Z"
+  );
+}
+
+function escapeIcs(text: string) {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+function buildIcs({
+  uid,
+  title,
+  start,
+  end,
+  location,
+  description,
+}: {
+  uid: string;
+  title: string;
+  start: Date;
+  end: Date;
+  location: string;
+  description: string;
+}) {
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//ShowUp2Move//EN",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${toIcsDate(new Date())}`,
+    `DTSTART:${toIcsDate(start)}`,
+    `DTEND:${toIcsDate(end)}`,
+    `SUMMARY:${escapeIcs(title)}`,
+    `LOCATION:${escapeIcs(location)}`,
+    `DESCRIPTION:${escapeIcs(description)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { saveProfile, type ProfileActionState } from "@/app/profile/actions";
 import type { ExtractedSport } from "@/lib/gemini";
 import { Button } from "@/components/ui/button";
@@ -23,14 +24,34 @@ type Props = {
   defaultDisplayName: string;
   defaultBio: string;
   savedSports: ExtractedSport[];
+  currentPhotoUrl: string | null;
 };
 
-export function ProfileForm({ defaultDisplayName, defaultBio, savedSports }: Props) {
+export function ProfileForm({ defaultDisplayName, defaultBio, savedSports, currentPhotoUrl }: Props) {
   const [state, formAction, pending] = useActionState(saveProfile, initialState);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const displaySports = state.status === "success"
     ? (state.extractedSports ?? [])
     : savedSports;
+
+  const photoSrc = previewUrl ?? state.photoUrl ?? currentPhotoUrl;
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  }
+
+  function clearPhoto() {
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   return (
     <Card className="w-full max-w-lg border-slate-800 bg-slate-900/80 backdrop-blur-sm text-white">
@@ -43,6 +64,51 @@ export function ProfileForm({ defaultDisplayName, defaultBio, savedSports }: Pro
 
       <form action={formAction}>
         <CardContent className="space-y-5 pt-5">
+
+          {/* Profile photo */}
+          <div className="space-y-2">
+            <Label className="text-slate-300 text-sm font-medium">
+              Profile photo
+              <span className="ml-1.5 font-normal text-slate-500">(optional — AI also detects sports from it)</span>
+            </Label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-2xl bg-slate-800 border-2 border-slate-700 overflow-hidden flex items-center justify-center shrink-0 relative">
+                {photoSrc ? (
+                  <Image
+                    src={photoSrc}
+                    alt="Profile photo"
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <span className="text-3xl text-slate-600">👤</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <input
+                  ref={fileInputRef}
+                  id="photo"
+                  name="photo"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  disabled={pending}
+                  className="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-slate-700 file:bg-slate-800 file:text-slate-200 file:text-xs file:font-medium hover:file:bg-slate-700 file:cursor-pointer disabled:opacity-50"
+                />
+                {previewUrl && (
+                  <button
+                    type="button"
+                    onClick={clearPhoto}
+                    className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
 
           {/* Display name */}
           <div className="space-y-1.5">
@@ -129,7 +195,7 @@ export function ProfileForm({ defaultDisplayName, defaultBio, savedSports }: Pro
             {pending ? (
               <>
                 <SpinnerIcon />
-                Analysing bio…
+                {previewUrl ? "Analysing bio + photo…" : "Analysing bio…"}
               </>
             ) : state.status === "success" ? (
               "Save again"

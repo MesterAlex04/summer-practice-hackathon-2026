@@ -12,7 +12,7 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, bio, sports, skill_levels")
+    .select("display_name, bio, sports, skill_levels, photo_url")
     .eq("id", user.id)
     .single();
 
@@ -45,6 +45,7 @@ export default async function ProfilePage() {
           defaultDisplayName={profile?.display_name ?? ""}
           defaultBio={profile?.bio ?? ""}
           savedSports={savedSports}
+          currentPhotoUrl={(profile?.photo_url as string | null) ?? null}
         />
       </div>
     </main>
