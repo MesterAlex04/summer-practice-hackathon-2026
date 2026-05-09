@@ -1,0 +1,19 @@
+# Dependency directories
+node_modules/
+**/node_modules/
+
+# Next.js build output
+.next/
+**/ .next/
+
+# Environment variables (CRITICAL)
+.env*
+**/.env*
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Backend specific (if using Python/Node)
+__pycache__/
+dist/
